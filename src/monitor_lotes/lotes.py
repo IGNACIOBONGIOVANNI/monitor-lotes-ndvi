@@ -70,8 +70,11 @@ def lote_desde_texto(texto: str, extension: str, nombre: str) -> Lote:
     ext = extension.lower().lstrip(".")
     if ext == "kml":
         geom = geometria_desde_kml(texto)
+        nombre = _nombre_kml(texto) or nombre
     elif ext in ("geojson", "json"):
-        geom = geometria_desde_geojson(json.loads(texto))
+        datos = json.loads(texto)
+        geom = geometria_desde_geojson(datos)
+        nombre = _nombre_geojson(datos) or nombre
     else:
         raise LoteInvalidoError(f"Formato no soportado: .{ext} (usá .kml o .geojson)")
     return crear_lote(geom, nombre)
@@ -109,6 +112,16 @@ def geometria_desde_geojson(datos: dict) -> Polygon | MultiPolygon:
     return _solo_poligonos(unary_union([_a_2d(g) for g in geoms]))
 
 
+def _nombre_geojson(datos: dict) -> str | None:
+    """Usa la propiedad 'nombre' (o 'name') del primer Feature, si existe."""
+    if datos.get("type") == "FeatureCollection":
+        feats = datos.get("features") or [{}]
+        datos = feats[0]
+    props = datos.get("properties") or {}
+    valor = props.get("nombre") or props.get("name")
+    return str(valor) if valor else None
+
+
 def geometria_desde_kml(texto: str) -> Polygon | MultiPolygon:
     """Parser mínimo de KML: toma todos los <Polygon>, con sus huecos.
 
@@ -142,6 +155,20 @@ def geometria_desde_kml(texto: str) -> Polygon | MultiPolygon:
     if not poligonos:
         raise LoteInvalidoError("No encontré ningún polígono en el KML.")
     return _solo_poligonos(unary_union(poligonos))
+
+
+def _nombre_kml(texto: str) -> str | None:
+    """Nombre del primer <Placemark> (lo que se ve en Google Earth)."""
+    try:
+        raiz = ET.fromstring(texto.encode("utf-8"))
+    except ET.ParseError:
+        return None
+    for e in raiz.iter():
+        if _local(e.tag) == "Placemark":
+            for hijo in e:
+                if _local(hijo.tag) == "name" and hijo.text and hijo.text.strip():
+                    return hijo.text.strip()
+    return None
 
 
 def _local(tag: str) -> str:

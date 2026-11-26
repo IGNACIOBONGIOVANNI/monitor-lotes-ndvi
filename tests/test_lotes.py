@@ -27,6 +27,19 @@ def test_kml_de_google_earth():
     assert geom.bounds == pytest.approx((-60.60, -30.80, -60.59, -30.79))
 
 
+def test_kml_toma_el_nombre_del_placemark():
+    assert lote_desde_texto(KML, ".kml", "archivo").nombre == "Lote 1"
+
+
+def test_geojson_toma_el_nombre_de_las_propiedades():
+    feat = {
+        "type": "Feature",
+        "properties": {"nombre": "La Esquina"},
+        "geometry": box(-60.60, -30.80, -60.59, -30.79).__geo_interface__,
+    }
+    assert lote_desde_texto(json.dumps(feat), ".geojson", "archivo").nombre == "La Esquina"
+
+
 def test_kml_con_hueco():
     kml = KML.replace(
         "</outerBoundaryIs>",
