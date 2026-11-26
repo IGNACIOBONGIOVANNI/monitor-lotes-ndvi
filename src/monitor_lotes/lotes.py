@@ -226,3 +226,36 @@ def id_geometria(geom: BaseGeometry) -> str:
     """Identificador estable del lote (para la caché): hash de la geometría redondeada a ~1 cm."""
     norm = set_precision(geom, 1e-7).normalize()
     return hashlib.sha1(norm.wkb).hexdigest()[:12]
+
+
+# ---------------------------------------------------------------- exportar
+
+
+def a_kml(geom: Polygon | MultiPolygon, nombre: str, descripcion: str = "") -> str:
+    """Geometría WGS84 -> KML (se abre en Google Earth y en planificadores de vuelo de drones)."""
+    from xml.sax.saxutils import escape
+
+    def anillo(coords) -> str:
+        return " ".join(f"{x:.7f},{y:.7f},0" for x, y in coords)
+
+    poligonos = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
+    partes = []
+    for p in poligonos:
+        huecos = "".join(
+            "<innerBoundaryIs><LinearRing><coordinates>"
+            f"{anillo(h.coords)}</coordinates></LinearRing></innerBoundaryIs>"
+            for h in p.interiors
+        )
+        partes.append(
+            "<Polygon><outerBoundaryIs><LinearRing><coordinates>"
+            f"{anillo(p.exterior.coords)}</coordinates></LinearRing></outerBoundaryIs>"
+            f"{huecos}</Polygon>"
+        )
+    cuerpo = partes[0] if len(partes) == 1 else f"<MultiGeometry>{''.join(partes)}</MultiGeometry>"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+        f"<name>{escape(nombre)}</name><Placemark><name>{escape(nombre)}</name>"
+        f"<description>{escape(descripcion)}</description>{cuerpo}</Placemark>"
+        "</Document></kml>\n"
+    )
