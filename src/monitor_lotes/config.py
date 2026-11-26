@@ -54,3 +54,9 @@ class Parametros:
     # Alertas: caída mínima de NDVI por píxel y superficie mínima afectada
     caida_ndvi: float = 0.15
     min_ha_alerta: float = 1.0
+    # Un píxel en caída cuenta solo si al menos N de sus 8 vecinos también caen.
+    # Filtra píxeles sueltos (bordes de nubes que SCL no marcó, pequeños desfasajes
+    # entre imágenes). 0 = sin filtro.
+    min_vecinos_alerta: int = 2
+    # Confirmación: fracción de la zona que debe seguir baja en la fecha limpia siguiente
+    fraccion_confirmacion: float = 0.5
