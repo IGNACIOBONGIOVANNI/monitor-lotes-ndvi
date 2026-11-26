@@ -1,0 +1,19 @@
+# Entorno
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secretos: nunca al repo
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Caché de imágenes descargadas (se regenera)
+cache/
+
+# Sistema
+.DS_Store
+Thumbs.db
