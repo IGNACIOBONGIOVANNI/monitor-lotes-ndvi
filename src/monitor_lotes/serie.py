@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -19,13 +20,15 @@ import rasterio
 from affine import Affine
 from rasterio.features import geometry_mask
 
-from .busqueda import Escena, buscar_pasadas, leer_pasada
+from .busqueda import Escena, Pasada, buscar_pasadas, leer_pasada
 from .cache import Cache
 from .config import Parametros
 from .lotes import Lote, leer_lote
 from .ndvi import procesar_escena
 
 log = logging.getLogger(__name__)
+
+MAX_DESCARGAS_PARALELAS = 6
 
 COLUMNAS = [
     "fecha",
@@ -73,26 +76,19 @@ def calcular_serie(
     params = params or Parametros()
     cache = cache or Cache()
     pasadas = buscar_pasadas(lote, desde, hasta, params.max_nubosidad_escena, fuente)
+    escenas = _obtener_escenas(pasadas, lote, cache, progreso)
 
     filas, ndvis = [], {}
     epsg = transform = forma = None
     dentro = None
-    for i, pasada in enumerate(pasadas, 1):
-        if progreso:
-            progreso(i, len(pasadas), pasada.fecha.isoformat())
-        escena = cache.leer(lote.id, pasada.fecha, pasada.ids)
+    for pasada in pasadas:
+        escena = escenas.get(pasada.fecha)
         if escena is None:
-            try:
-                escena = leer_pasada(pasada, lote)
-            except Exception as e:
-                log.warning("No se pudo leer %s: %s", pasada.fecha, e)
-                continue
-            cache.guardar(lote.id, escena)
-
+            continue
         if forma is None:
             epsg, transform, forma = escena.epsg, escena.transform, escena.rojo.shape
             dentro = mascara_lote(lote, transform, forma)
-        elif escena.rojo.shape != forma or escena.transform != transform:
+        elif escena.rojo.shape != forma or not np.allclose(escena.transform, transform):
             log.warning("La grilla de %s no coincide con la del lote; se omite", pasada.fecha)
             continue
 
@@ -120,6 +116,46 @@ def calcular_serie(
     return Serie(lote=lote, tabla=tabla, ndvi=ndvis, epsg=epsg, transform=transform)
 
 
+def _obtener_escenas(
+    pasadas: list[Pasada],
+    lote: Lote,
+    cache: Cache,
+    progreso: Callable[[int, int, str], None] | None,
+) -> dict[date, Escena]:
+    """Primero la caché; lo que falta se descarga en paralelo.
+
+    Leer un recorte es casi todo espera de red (no CPU), así que varios hilos a la vez
+    bajan el tiempo de una campaña de ~6 min a ~1-2 min sin cargar la máquina.
+    """
+    escenas: dict[date, Escena] = {}
+    faltan = []
+    for p in pasadas:
+        e = cache.leer(lote.id, p.fecha, p.ids)
+        if e is not None:
+            escenas[p.fecha] = e
+        else:
+            faltan.append(p)
+
+    hechas = len(escenas)
+    if progreso:
+        progreso(hechas, len(pasadas), "caché")
+    with ThreadPoolExecutor(max_workers=MAX_DESCARGAS_PARALELAS) as pool:
+        futuros = {pool.submit(leer_pasada, p, lote): p for p in faltan}
+        for fut in as_completed(futuros):
+            p = futuros[fut]
+            hechas += 1
+            try:
+                e = fut.result()
+            except Exception as err:
+                log.warning("No se pudo leer %s: %s", p.fecha, err)
+            else:
+                cache.guardar(lote.id, e)  # se escribe desde un solo hilo
+                escenas[p.fecha] = e
+            if progreso:
+                progreso(hechas, len(pasadas), p.fecha.isoformat())
+    return escenas
+
+
 def procesar_desde_escenas(lote: Lote, escenas: list[Escena], params: Parametros) -> Serie:
     """Igual que calcular_serie pero con escenas ya en memoria (útil para tests)."""
     filas, ndvis = [], {}
@@ -143,10 +179,11 @@ def exportar(serie: Serie, directorio: str | Path) -> None:
     (d / "lote.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": [serie.lote.a_geojson()]}, indent=1),
         encoding="utf-8",
+        newline="\n",
     )
     tabla = serie.tabla.copy()
     tabla["fecha"] = pd.to_datetime(tabla["fecha"]).dt.strftime("%Y-%m-%d")
-    tabla.round(4).to_csv(d / "serie.csv", index=False)
+    tabla.round(4).to_csv(d / "serie.csv", index=False, lineterminator="\n")
 
     if not serie.ndvi:
         return
