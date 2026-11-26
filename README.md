@@ -8,7 +8,9 @@ de Sentinel-2: calcula el NDVI de cada fecha sin nubes, muestra el mapa y la cur
 campaña, y **avisa cuando el NDVI cae de golpe en una zona del lote**, con un mapa de la zona
 y cuántas hectáreas son.
 
-**🔗 Demo online:** _pendiente de publicar en Streamlit Community Cloud_
+**🔗 Demo online: [monitor-lotes-ndvi.streamlit.app](https://monitor-lotes-ndvi.streamlit.app/)**
+(abre con el lote de ejemplo ya calculado; si la app estuvo un tiempo sin uso, Streamlit
+tarda unos segundos en despertarla)
 
 ![Vista principal: mapa de NDVI del lote y curva de la campaña](docs/capturas/vista_principal.png)
 

@@ -7,7 +7,9 @@ A web app that tracks an agricultural field with **free** Sentinel-2 satellite i
 computes NDVI for every cloud-free date, shows the map and the season curve, and **warns when
 NDVI drops sharply in part of the field**, with a map of that zone and its area in hectares.
 
-**🔗 Live demo:** _to be published on Streamlit Community Cloud_
+**🔗 Live demo: [monitor-lotes-ndvi.streamlit.app](https://monitor-lotes-ndvi.streamlit.app/)**
+(opens with the example field already computed; if the app has been idle, Streamlit takes a
+few seconds to wake it up)
 
 ![Main view: NDVI map of the field and season curve](docs/capturas/vista_principal.png)
 

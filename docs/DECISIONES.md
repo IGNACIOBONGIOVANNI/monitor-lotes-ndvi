@@ -85,6 +85,9 @@ entrevista con la respuesta corta.
   de explicar), `asyncio` (GDAL no es asíncrono).
 - **Por qué:** leer un recorte es casi todo espera de red, no CPU. Con 6 hilos la campaña bajó
   de unos 6 min a **98 s** con el mismo resultado. La caché se escribe desde un solo hilo.
+- **Dato de la demo online:** en Streamlit Community Cloud la misma campaña sin caché tarda
+  ~25 s. Los servidores están en EE. UU., cerca del bucket de AWS donde viven las imágenes
+  (us-west-2): la latencia de red pesa más que la CPU.
 
 ---
 
