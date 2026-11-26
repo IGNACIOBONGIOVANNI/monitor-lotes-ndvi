@@ -1,0 +1,23 @@
+# Dependencias para Streamlit Community Cloud (y para correr en local).
+# Versiones fijas: la demo online usa exactamente lo que se probó.
+
+numpy==2.5.5
+pandas==3.1.1
+xarray==2026.9.0
+shapely==2.2.0
+pyproj==3.8.0
+rasterio==1.5.2
+affine==3.0.1
+pystac==1.16.1
+pystac-client==0.9.1
+odc-stac==0.5.3
+odc-geo==0.5.4
+planetary-computer==1.0.0
+streamlit==1.67.0
+streamlit-folium==0.28.0
+folium==1.0.0
+plotly==7.2.0
+
+# El propio paquete (src/monitor_lotes), en modo editable: así, cuando Streamlit Cloud
+# baja un commit nuevo, usa el código actualizado sin reinstalar dependencias.
+-e .
