@@ -14,6 +14,9 @@ __pycache__/
 # Caché de imágenes descargadas (se regenera)
 cache/
 
+# Configuración local del editor / asistente
+.claude/
+
 # Sistema
 .DS_Store
 Thumbs.db
