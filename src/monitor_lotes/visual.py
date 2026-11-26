@@ -37,6 +37,20 @@ AZUL_BANDA = "rgba(42, 120, 214, 0.12)"
 GRIS_MUDO = "#898781"
 TINTA_SECUNDARIA = "#52514e"
 GRILLA = "#e1e0d9"
+NARANJA_ALERTA = "#ec835a"  # color de estado "serious": siempre junto a ícono o etiqueta
+
+# Escala divergente para el CAMBIO de NDVI: rojo = bajó, azul = subió, gris = sin cambio.
+# Dos tonos opuestos y un punto medio neutro (no un tono), para que "nada" se lea como nada.
+PALETA_CAMBIO = [
+    "#b2182b",
+    "#d6604d",
+    "#f4a582",
+    "#f0efec",
+    "#92c5de",
+    "#4393c3",
+    "#2166ac",
+]
+CAMBIO_MAX = 0.4
 
 
 def _hex_a_rgb(h: str) -> tuple[int, int, int]:
@@ -100,8 +114,8 @@ def a_mercator(
 # ---------------------------------------------------------------- gráfico
 
 
-def figura_serie(tabla: pd.DataFrame, fecha_sel: date | None = None):
-    """Mediana de NDVI con banda p10-p90; las fechas descartadas como marcas grises."""
+def figura_serie(tabla: pd.DataFrame, fecha_sel: date | None = None, alertas: list | None = None):
+    """Mediana de NDVI con banda p10-p90; descartadas como marcas grises; alertas como ▼."""
     import plotly.graph_objects as go
 
     ok = tabla[tabla["usable"]]
@@ -165,6 +179,34 @@ def figura_serie(tabla: pd.DataFrame, fecha_sel: date | None = None):
                 ),
             )
         )
+    for estado_ok, nombre, simbolo in (
+        (True, "Alerta", "triangle-down"),
+        (False, "Alerta sin confirmar", "triangle-down-open"),
+    ):
+        grupo = [a for a in (alertas or []) if (a.estado != "sin confirmar") == estado_ok]
+        if not grupo:
+            continue
+        medianas = ok.set_index("fecha")["mediana"]
+        fig.add_trace(
+            go.Scatter(
+                x=[a.fecha for a in grupo],
+                y=[float(medianas.get(a.fecha, np.nan)) + 0.06 for a in grupo],
+                mode="markers",
+                name=nombre,
+                # Relleno lleno / vacío = confirmada / sin confirmar: no depende solo del color
+                marker={
+                    "symbol": simbolo,
+                    "size": 12,
+                    "color": NARANJA_ALERTA,
+                    "line": {"width": 2, "color": NARANJA_ALERTA},
+                },
+                customdata=[[a.hectareas, a.estado] for a in grupo],
+                hovertemplate=(
+                    "%{x|%d/%m/%Y}<br><b>Alerta (%{customdata[1]})</b><br>"
+                    "%{customdata[0]:.1f} ha con caída de NDVI<extra></extra>"
+                ),
+            )
+        )
     if fecha_sel is not None:
         fig.add_vline(
             x=pd.Timestamp(fecha_sel).timestamp() * 1000, line_width=1, line_color=TINTA_SECUNDARIA
@@ -175,7 +217,7 @@ def figura_serie(tabla: pd.DataFrame, fecha_sel: date | None = None):
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
         hovermode="closest",
         legend={"orientation": "h", "y": 1.08, "x": 0},
-        yaxis={"title": "NDVI", "range": [0, 1], "gridcolor": GRILLA, "zeroline": False},
+        yaxis={"title": "NDVI", "range": [0, 1.08], "gridcolor": GRILLA, "zeroline": False},
         xaxis={
             "showgrid": False,
             "tickformat": "%d/%m/%y",
