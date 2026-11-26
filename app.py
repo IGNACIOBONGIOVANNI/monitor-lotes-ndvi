@@ -190,7 +190,7 @@ with st.sidebar:
 
     lote: Lote | None = st.session_state["lote"]
     if lote is not None:
-        st.success(f"**{lote.nombre}** · {lote.hectareas:,.1f} ha · UTM EPSG:{lote.epsg_utm}")
+        st.success(f"**{lote.nombre}** · {num(lote.hectareas)} ha · UTM EPSG:{lote.epsg_utm}")
 
     st.header("2 · Campaña")
     hoy = date.today()
