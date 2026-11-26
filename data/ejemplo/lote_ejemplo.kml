@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lote APROXIMADO en zona rural al oeste de San Justo, Santa Fe (~68 ha).
+     Es solo para la demo: reemplazalo por un lote real dibujado en Google Earth. -->
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Lote ejemplo San Justo</name>
+    <Placemark>
+      <name>Lote ejemplo San Justo</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -60.6600,-30.8050,0 -60.6520,-30.8050,0 -60.6520,-30.7970,0
+              -60.6600,-30.7970,0 -60.6600,-30.8050,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>

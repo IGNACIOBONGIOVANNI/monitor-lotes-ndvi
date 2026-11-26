@@ -1,0 +1,38 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "nombre": "lote_ejemplo"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -60.66,
+       -30.805
+      ],
+      [
+       -60.652,
+       -30.805
+      ],
+      [
+       -60.652,
+       -30.797
+      ],
+      [
+       -60.66,
+       -30.797
+      ],
+      [
+       -60.66,
+       -30.805
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
