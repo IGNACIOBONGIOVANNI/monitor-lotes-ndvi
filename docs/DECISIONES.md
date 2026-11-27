@@ -299,7 +299,20 @@ entrevista con la respuesta corta.
   `requirements.txt`. Con una instalación normal, un cambio en `src/` no se vería después de un
   push; con modo editable sí.
 
-### 8.5 Commits con email "noreply" de GitHub
+### 8.5 Recarga de módulos en Streamlit Cloud
+- **Qué pasó:** después de un push, la demo online mostró un `AttributeError`. Streamlit
+  vuelve a ejecutar `app.py` en cada interacción, pero los módulos ya importados quedan en
+  memoria: el `app.py` nuevo llamaba a una clase que el `visual.py` viejo en memoria no tenía.
+  En local no se veía porque cada prueba arrancaba un proceso nuevo.
+- **Arreglo:** antes de importar el paquete, `app.py` revisa si algún archivo de
+  `src/monitor_lotes` es más nuevo que la versión cargada; si lo es, la descarta y la vuelve a
+  importar. Hay un test que reproduce la falla (deja en memoria un módulo "viejo" y simula el
+  push) y que falla si se saca la recarga.
+- **Descarté:** reiniciar la app a mano desde el panel de Streamlit Cloud en cada cambio
+  (depende de acordarse) y sacar el modo editable (`-e .`), que haría que los cambios de `src/`
+  directamente no llegaran a la demo.
+
+### 8.6 Commits con email "noreply" de GitHub
 - Para no exponer el email personal en el historial público.
 
 ---
