@@ -46,3 +46,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# app.py importa el paquete después de revisar si hay que recargarlo (ver recargar_paquete_si_cambio)
+"app.py" = ["E402", "I001"]

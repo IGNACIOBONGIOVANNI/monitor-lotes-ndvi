@@ -101,3 +101,22 @@ def test_editar_el_dibujo_vuelve_con_los_dibujos():
     assert not at.exception
     assert at.session_state["dibujos_iniciales"] == [GIRADO]  # el mapa arranca con lo girado
     assert at.session_state["lote"].id == lote.id
+
+
+def test_recarga_modulos_que_cambiaron_como_tras_un_push():
+    """Reproduce la falla de Streamlit Cloud: app.py nuevo con un módulo viejo en memoria."""
+    import os
+    import sys
+
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    assert not at.exception
+    viejo = sys.modules["monitor_lotes.visual"]
+    clase = viejo.CreditoLeaflet
+    try:
+        del viejo.CreditoLeaflet  # simula la versión anterior del módulo, sin la clase nueva
+        os.utime(viejo.__file__)  # el push actualiza el archivo en disco
+        at.run()
+        assert not at.exception  # sin la recarga: AttributeError, como pasó en la nube
+        assert sys.modules["monitor_lotes.visual"] is not viejo
+    finally:
+        viejo.CreditoLeaflet = clase

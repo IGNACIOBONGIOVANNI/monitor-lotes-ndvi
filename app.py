@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -18,6 +20,28 @@ from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
 from streamlit_folium import st_folium
 
+
+def recargar_paquete_si_cambio(nombre: str = "monitor_lotes") -> None:
+    """Descarta de la memoria el paquete si alguno de sus archivos cambió desde que se cargó.
+
+    Streamlit vuelve a ejecutar este archivo en cada interacción, pero los módulos importados
+    quedan en memoria. En Streamlit Cloud, después de un push, app.py nuevo llegaba a usar un
+    módulo viejo de src/ (y fallaba). Así, el próximo `import` trae siempre el código actual.
+    """
+    paquete = sys.modules.get(nombre)
+    if paquete is None or not getattr(paquete, "__file__", None):
+        return
+    cargado = getattr(paquete, "_cargado_en", 0.0)
+    carpeta = Path(paquete.__file__).parent
+    if any(f.stat().st_mtime > cargado for f in carpeta.iterdir() if f.is_file()):
+        for modulo in [m for m in sys.modules if m.split(".")[0] == nombre]:
+            del sys.modules[modulo]
+
+
+_inicio_carga = time.time()
+recargar_paquete_si_cambio()
+
+import monitor_lotes
 from monitor_lotes import visual
 from monitor_lotes.alertas import (
     CONFIRMADA,
@@ -39,6 +63,9 @@ from monitor_lotes.lotes import (
 )
 from monitor_lotes.manijas import ManijasLote
 from monitor_lotes.serie import Serie, calcular_serie, importar
+
+if not hasattr(monitor_lotes, "_cargado_en"):
+    monitor_lotes._cargado_en = _inicio_carga  # marca de cuándo se cargó esta versión
 
 RAIZ = Path(__file__).parent
 EJEMPLO = RAIZ / "data" / "ejemplo" / "resultados"
