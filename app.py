@@ -48,7 +48,11 @@ SATELITE = (
 )
 ORIGENES = ("Lote de ejemplo (San Justo)", "Subir KML o GeoJSON", "Dibujar en el mapa")
 
-st.set_page_config(page_title="Monitor de lotes · NDVI", page_icon="🌱", layout="wide")
+st.set_page_config(
+    page_title="Monitor de lotes · NDVI",
+    page_icon=str(RAIZ / "assets" / "favicon.png"),  # generado con scripts/generar_logo.py
+    layout="wide",
+)
 logging.getLogger("rasterio").setLevel(logging.ERROR)
 
 
@@ -97,6 +101,7 @@ def mapa_base(lote: Lote | None) -> folium.Map:
     m = folium.Map(location=CENTRO_INICIAL, zoom_start=13, tiles=None, control_scale=True)
     folium.TileLayer(SATELITE, attr="Esri World Imagery", name="Satélite").add_to(m)
     folium.TileLayer("OpenStreetMap", name="Calles", show=False).add_to(m)
+    visual.CreditoLeaflet().add_to(m)
     if lote is not None:
         minx, miny, maxx, maxy = lote.geometria.bounds
         m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(20, 20))

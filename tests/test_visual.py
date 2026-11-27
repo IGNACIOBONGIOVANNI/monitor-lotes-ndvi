@@ -57,3 +57,16 @@ def test_figura_serie():
     fig = figura_serie(tabla, date(2025, 12, 11))
     nombres = [t.name for t in fig.data]
     assert "Mediana del lote" in nombres and "Descartada (nubes)" in nombres
+
+
+def test_credito_de_leaflet_sin_bandera():
+    import folium
+    from streamlit_folium import _get_map_string
+
+    from monitor_lotes.visual import CreditoLeaflet
+
+    m = folium.Map(location=(-30.8, -60.6), zoom_start=13)
+    CreditoLeaflet().add_to(m)
+    js = _get_map_string(m)  # lo que streamlit-folium ejecuta en el navegador
+    assert "map_div.attributionControl.setPrefix(" in js
+    assert 'href="https://leafletjs.com"' in js

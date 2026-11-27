@@ -10,6 +10,8 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from affine import Affine
+from branca.element import MacroElement
+from jinja2 import Template
 from pyproj import Transformer
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
@@ -51,6 +53,27 @@ PALETA_CAMBIO = [
     "#2166ac",
 ]
 CAMBIO_MAX = 0.4
+
+
+class CreditoLeaflet(MacroElement):
+    """Crédito de Leaflet sin la bandera que la librería agrega por defecto desde la 1.8.
+
+    Se mantiene el link a Leaflet; los créditos de cada capa (por ejemplo Esri) no cambian.
+    """
+
+    _template = Template(
+        """
+        {% macro script(this, kwargs) %}
+        {{ this._parent.get_name() }}.attributionControl.setPrefix(
+            '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>'
+        );
+        {% endmacro %}
+        """
+    )
+
+    def __init__(self):
+        super().__init__()
+        self._name = "CreditoLeaflet"
 
 
 def _hex_a_rgb(h: str) -> tuple[int, int, int]:
