@@ -37,6 +37,7 @@ from monitor_lotes.lotes import (
     lote_desde_dibujo,
     lote_desde_texto,
 )
+from monitor_lotes.manijas import ManijasLote
 from monitor_lotes.serie import Serie, calcular_serie, importar
 
 RAIZ = Path(__file__).parent
@@ -79,13 +80,8 @@ def editar_dibujo() -> None:
 
 
 def restaurar_dibujo() -> None:
-    """El mapa de dibujo vuelve con los dibujos y el giro que había.
-
-    Streamlit borra el valor de un control que no se mostró en la última pasada (el de giro
-    no se ve mientras se muestran los resultados), por eso el ángulo se guarda aparte.
-    """
+    """El mapa de dibujo vuelve con los dibujos que había (ya girados o movidos), editables."""
     st.session_state["dibujos_iniciales"] = st.session_state.get("dibujos", [])
-    st.session_state["giro"] = st.session_state.get("giro_guardado", 0)
 
 
 st.session_state.setdefault("lote", None)
@@ -107,11 +103,15 @@ def mapa_base(lote: Lote | None) -> folium.Map:
     return m
 
 
-def mapa_dibujo(iniciales: list[dict]) -> folium.Map:
-    """Mapa con herramientas para dibujar, editar y borrar. Arranca con `iniciales` editables.
+ESTILO_DIBUJO = {"color": "#ffd60a", "weight": 3, "fillOpacity": 0.12}  # amarillo: resalta
 
-    Se arma siempre igual mientras se dibuja (no depende de lo último dibujado): si el HTML
-    del mapa cambiara, el componente lo recargaría y se perderían los trazos y el zoom.
+
+def mapa_dibujo(iniciales: list[dict]) -> folium.Map:
+    """Mapa para dibujar el lote: polígono, rectángulo, editar, borrar, y manijas ↻ y ✥.
+
+    Arranca con `iniciales` ya editables. Se arma siempre igual mientras se dibuja (no
+    depende de lo último dibujado): si el HTML del mapa cambiara, el componente lo
+    recargaría y se perderían los trazos y el zoom.
     """
     m = mapa_base(None)
     grupo = folium.FeatureGroup(name="Dibujos")
@@ -120,27 +120,47 @@ def mapa_dibujo(iniciales: list[dict]) -> folium.Map:
         for p in getattr(geom, "geoms", [geom]):
             folium.Polygon(
                 [(y, x) for x, y in p.exterior.coords],
-                color="#ffffff",
-                weight=2,
+                color=ESTILO_DIBUJO["color"],
+                weight=ESTILO_DIBUJO["weight"],
                 fill=True,
-                fill_opacity=0.1,
+                fill_opacity=ESTILO_DIBUJO["fillOpacity"],
             ).add_to(grupo)
     grupo.add_to(m)
     Draw(
         feature_group=grupo,
+        show_geometry_on_click=False,
         draw_options={
             "polyline": False,
             "circle": False,
             "marker": False,
             "circlemarker": False,
-            "polygon": {"allowIntersection": False, "showArea": True},
-            "rectangle": {"showArea": True},
+            "polygon": {
+                "allowIntersection": False,
+                "showArea": True,
+                "shapeOptions": ESTILO_DIBUJO,
+            },
+            "rectangle": {"showArea": True, "shapeOptions": ESTILO_DIBUJO},
         },
-        edit_options={"edit": True, "remove": True},
+        # Ojo: pasar "edit": True rompe la edición de vértices de Leaflet.draw (pisa sus
+        # opciones de estilo y falla en silencio). Con un diccionario funciona.
+        edit_options={
+            "edit": {
+                "selectedPathOptions": {
+                    "dashArray": "6, 6",
+                    "fill": True,
+                    "fillColor": ESTILO_DIBUJO["color"],
+                    "fillOpacity": 0.2,
+                    "maintainColor": True,
+                }
+            },
+            "remove": True,
+        },
     ).add_to(m)
     if iniciales:
         minx, miny, maxx, maxy = unary_union([shape(g) for g in iniciales]).bounds
-        m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(40, 40))
+        # margen amplio: la manija ↻ va 34 px por arriba del lote y no tiene que quedar cortada
+        m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(80, 80))
+    ManijasLote(grupo).add_to(m)
     return m
 
 
@@ -262,55 +282,42 @@ st.caption(
 if origen == ORIGENES[2] and st.session_state["serie"] is None:
     st.subheader("Dibujá el lote")
     st.markdown(
-        "- **⬟ Polígono:** clic en cada esquina del lote y clic en el primer punto para cerrar. "
-        "Es lo más preciso para lotes inclinados.\n"
-        "- **■ Rectángulo:** arrastrá; después lo podés **girar** con el control de abajo.\n"
-        "- **✎ Editar:** mové los vértices y tocá *Save*. "
-        "**🗑 Borrar:** tocá el dibujo que querés eliminar y después *Save*."
+        "- **⬟ Polígono:** clic en cada esquina del lote y clic en el primer punto para cerrar.\n"
+        "- **■ Rectángulo:** hacé clic y arrastrá.\n"
+        "- **↻ Girar** y **✥ Mover:** mantené apretada la manija (↻ arriba del lote, ✥ en su "
+        "centro) y arrastrá.\n"
+        "- **✎ Editar** vértices o **🗑 Borrar** el dibujo que elijas; después tocá *Save*."
     )
     dibujos: list[dict] = st.session_state["dibujos"]
-    if st.session_state.pop("reiniciar_giro", False):
-        st.session_state["giro"] = 0  # se hace antes de crear el control (Streamlit lo exige)
-    c_sel, c_giro = st.columns([1, 2])
     i_dibujo = len(dibujos) - 1
     if len(dibujos) > 1:
-        i_dibujo = c_sel.selectbox(
+        i_dibujo = st.selectbox(
             "¿Cuál dibujo es el lote?",
             range(len(dibujos)),
             index=len(dibujos) - 1,
             format_func=lambda i: f"Dibujo {i + 1} · {num(hectareas_wgs84(shape(dibujos[i])))} ha",
         )
-    grados = c_giro.slider(
-        "Girar el lote (grados; positivo = sentido horario)",
-        -90,
-        90,
-        0,
-        1,
-        key="giro",
-        disabled=not dibujos,
-    )
-    st.session_state["giro_guardado"] = grados
 
     lote_dibujado, error_dibujo = None, None
     if dibujos:
         try:
-            lote_dibujado = lote_desde_dibujo(dibujos[i_dibujo], grados)
+            lote_dibujado = lote_desde_dibujo(dibujos[i_dibujo])
         except LoteInvalidoError as e:
             error_dibujo = str(e)
 
-    # La vista previa se agrega como capa aparte: así el mapa no se recarga y no se pierden
-    # los dibujos ni el zoom al mover el control de giro.
-    vista_previa = folium.FeatureGroup(name="Lote a analizar")
-    if lote_dibujado is not None:
+    # Con varios dibujos se marca cuál es el lote elegido. Va como capa aparte para que el
+    # mapa no se recargue (se perderían los trazos y el zoom).
+    resaltado = folium.FeatureGroup(name="Lote elegido")
+    if lote_dibujado is not None and len(dibujos) > 1:
         folium.GeoJson(
             lote_dibujado.a_geojson(),
             style_function=lambda _: {
-                "color": "#ffd60a",
+                "color": "#ffffff",
                 "weight": 3,
-                "dashArray": "6 4",
+                "dashArray": "6 5",
                 "fillOpacity": 0,
             },
-        ).add_to(vista_previa)
+        ).add_to(resaltado)
 
     salida = st_folium(
         mapa_dibujo(st.session_state["dibujos_iniciales"]),
@@ -318,7 +325,7 @@ if origen == ORIGENES[2] and st.session_state["serie"] is None:
         height=560,
         use_container_width=True,
         returned_objects=["all_drawings"],
-        feature_group_to_add=vista_previa,
+        feature_group_to_add=resaltado,
     )
     nuevos = (salida or {}).get("all_drawings")
     if nuevos is not None:
@@ -329,13 +336,12 @@ if origen == ORIGENES[2] and st.session_state["serie"] is None:
         ]
         if nuevos != dibujos:
             st.session_state["dibujos"] = nuevos
-            st.session_state["reiniciar_giro"] = True  # un dibujo nuevo arranca sin girar
             st.rerun()
 
     if error_dibujo:
         st.error(error_dibujo)
-    elif lote_dibujado is not None:
-        st.caption("Contorno **amarillo punteado**: el lote que se va a analizar.")
+    elif len(dibujos) > 1:
+        st.caption("Contorno **blanco punteado**: el dibujo elegido como lote.")
     fijar_lote(lote_dibujado)
 
 

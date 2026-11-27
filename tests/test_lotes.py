@@ -101,49 +101,15 @@ def test_id_estable():
     assert a.id == b.id
 
 
-# ---------------------------------------------------------------- dibujo y giro
+# ---------------------------------------------------------------- dibujo
 
 RECTANGULO = box(-60.660, -30.805, -60.652, -30.797).__geo_interface__
 
 
-def test_girar_mantiene_la_superficie():
-    from monitor_lotes.lotes import lote_desde_dibujo
+def test_lote_desde_dibujo():
+    from monitor_lotes.lotes import hectareas_wgs84, lote_desde_dibujo
 
-    original = lote_desde_dibujo(RECTANGULO)
-    girado = lote_desde_dibujo(RECTANGULO, 30)
-    assert girado.hectareas == pytest.approx(original.hectareas, rel=1e-4)
-    assert girado.geometria.centroid.distance(original.geometria.centroid) < 1e-6
-
-
-def test_girar_90_grados_intercambia_ancho_y_alto():
-    from monitor_lotes.lotes import a_crs, girar, zona_utm_epsg
-
-    geom = box(-60.660, -30.805, -60.652, -30.797)
-    epsg = zona_utm_epsg(geom)
-
-    def medidas(g):
-        minx, miny, maxx, maxy = a_crs(g, epsg).bounds
-        return maxx - minx, maxy - miny
-
-    ancho, alto = medidas(geom)
-    ancho_g, alto_g = medidas(girar(geom, 90))
-    assert ancho_g == pytest.approx(alto, rel=1e-3)
-    assert alto_g == pytest.approx(ancho, rel=1e-3)
-
-
-def test_girar_positivo_es_horario():
-    """Un triángulo que apunta al norte, girado +90°, tiene que apuntar al este."""
-    from shapely.geometry import Polygon
-
-    from monitor_lotes.lotes import girar
-
-    tri = Polygon([(-60.66, -30.80), (-60.65, -30.80), (-60.655, -30.79)])  # punta al norte
-    punta = max(girar(tri, 90).exterior.coords, key=lambda p: p[0])
-    assert punta[1] == pytest.approx(tri.centroid.y, abs=2e-3)
-
-
-def test_girar_cero_no_cambia_nada():
-    from monitor_lotes.lotes import girar
-
-    geom = box(-60.660, -30.805, -60.652, -30.797)
-    assert girar(geom, 0) is geom
+    lote = lote_desde_dibujo(RECTANGULO)
+    assert lote.nombre == "Lote dibujado"
+    assert lote.hectareas == pytest.approx(67.9, rel=0.01)
+    assert hectareas_wgs84(lote.geometria) == pytest.approx(lote.hectareas)

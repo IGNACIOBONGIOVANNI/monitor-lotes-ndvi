@@ -35,62 +35,69 @@ def test_subir_el_umbral_reduce_las_alertas():
     assert despues < antes
 
 
-def test_modo_dibujo_con_giro():
+RECT = {
+    "type": "Polygon",
+    "coordinates": [
+        [
+            [-60.66, -30.805],
+            [-60.652, -30.805],
+            [-60.652, -30.797],
+            [-60.66, -30.797],
+            [-60.66, -30.805],
+        ]
+    ],
+}
+# El mismo lote girado ~30° (como llega desde el navegador después de usar la manija ↻)
+GIRADO = {
+    "type": "Polygon",
+    "coordinates": [
+        [
+            [-60.6609, -30.8016],
+            [-60.6553, -30.8073],
+            [-60.6511, -30.8004],
+            [-60.6567, -30.7947],
+            [-60.6609, -30.8016],
+        ]
+    ],
+}
+
+
+def test_modo_dibujo_arma_el_lote_y_deja_elegir():
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.radio(key="origen").set_value("Dibujar en el mapa").run()
     assert not at.exception
-    rect = {
-        "type": "Polygon",
-        "coordinates": [
-            [
-                [-60.66, -30.805],
-                [-60.652, -30.805],
-                [-60.652, -30.797],
-                [-60.66, -30.797],
-                [-60.66, -30.805],
-            ]
-        ],
-    }
-    at.session_state["dibujos"] = [rect]
+    assert at.session_state["lote"] is None  # todavía no se dibujó nada
+
+    at.session_state["dibujos"] = [RECT]
     at.run()
     assert not at.exception
-    ha = at.session_state["lote"].hectareas
-    at.slider(key="giro").set_value(35).run()
+    assert at.session_state["lote"].hectareas == pytest.approx(67.9, rel=0.01)
+
+    at.session_state["dibujos"] = [RECT, GIRADO]
+    at.run()
     assert not at.exception
-    girado = at.session_state["lote"]
-    assert girado.hectareas == pytest.approx(ha, rel=1e-3)
-    assert girado.geometria.bounds != pytest.approx(
-        rect_bounds := (-60.66, -30.805, -60.652, -30.797)
+    elegir = at.selectbox[0]
+    assert elegir.label == "¿Cuál dibujo es el lote?"
+    elegir.set_value(0).run()
+    assert at.session_state["lote"].geometria.bounds == pytest.approx(
+        (-60.66, -30.805, -60.652, -30.797)
     )
-    del rect_bounds
 
 
-def test_editar_el_dibujo_conserva_el_giro():
+def test_editar_el_dibujo_vuelve_con_los_dibujos():
     from monitor_lotes.serie import importar
 
     at = AppTest.from_file(APP, default_timeout=60).run()
     at.radio(key="origen").set_value("Dibujar en el mapa").run()
-    at.session_state["dibujos"] = [
-        {
-            "type": "Polygon",
-            "coordinates": [
-                [
-                    [-60.66, -30.805],
-                    [-60.652, -30.805],
-                    [-60.652, -30.797],
-                    [-60.66, -30.797],
-                    [-60.66, -30.805],
-                ]
-            ],
-        }
-    ]
+    at.session_state["dibujos"] = [GIRADO]
     at.run()
-    at.slider(key="giro").set_value(25).run()
-    # Simula que ya se calculó: se muestran resultados y el control de giro desaparece
+    lote = at.session_state["lote"]
+    # Simula que ya se calculó: se muestran resultados y el mapa de dibujo desaparece
     at.session_state["serie"] = importar(Path(APP).parent / "data" / "ejemplo" / "resultados")
     at.run()
     assert not at.exception
     editar = next(b for b in at.button if b.label == "Editar el dibujo")
     editar.click().run()
     assert not at.exception
-    assert at.slider(key="giro").value == 25
+    assert at.session_state["dibujos_iniciales"] == [GIRADO]  # el mapa arranca con lo girado
+    assert at.session_state["lote"].id == lote.id
