@@ -3,6 +3,7 @@ errores y sin internet (usa los resultados precalculados de data/ejemplo)."""
 
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 APP = str(Path(__file__).parent.parent / "app.py")
@@ -32,3 +33,64 @@ def test_subir_el_umbral_reduce_las_alertas():
     assert not at.exception
     despues = len(at.selectbox[0].options) if at.selectbox else 0
     assert despues < antes
+
+
+def test_modo_dibujo_con_giro():
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.radio(key="origen").set_value("Dibujar en el mapa").run()
+    assert not at.exception
+    rect = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-60.66, -30.805],
+                [-60.652, -30.805],
+                [-60.652, -30.797],
+                [-60.66, -30.797],
+                [-60.66, -30.805],
+            ]
+        ],
+    }
+    at.session_state["dibujos"] = [rect]
+    at.run()
+    assert not at.exception
+    ha = at.session_state["lote"].hectareas
+    at.slider(key="giro").set_value(35).run()
+    assert not at.exception
+    girado = at.session_state["lote"]
+    assert girado.hectareas == pytest.approx(ha, rel=1e-3)
+    assert girado.geometria.bounds != pytest.approx(
+        rect_bounds := (-60.66, -30.805, -60.652, -30.797)
+    )
+    del rect_bounds
+
+
+def test_editar_el_dibujo_conserva_el_giro():
+    from monitor_lotes.serie import importar
+
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.radio(key="origen").set_value("Dibujar en el mapa").run()
+    at.session_state["dibujos"] = [
+        {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [-60.66, -30.805],
+                    [-60.652, -30.805],
+                    [-60.652, -30.797],
+                    [-60.66, -30.797],
+                    [-60.66, -30.805],
+                ]
+            ],
+        }
+    ]
+    at.run()
+    at.slider(key="giro").set_value(25).run()
+    # Simula que ya se calculó: se muestran resultados y el control de giro desaparece
+    at.session_state["serie"] = importar(Path(APP).parent / "data" / "ejemplo" / "resultados")
+    at.run()
+    assert not at.exception
+    editar = next(b for b in at.button if b.label == "Editar el dibujo")
+    editar.click().run()
+    assert not at.exception
+    assert at.slider(key="giro").value == 25

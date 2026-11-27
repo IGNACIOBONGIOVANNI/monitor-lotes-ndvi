@@ -15,6 +15,7 @@ import folium
 import streamlit as st
 from folium.plugins import Draw
 from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 from streamlit_folium import st_folium
 
 from monitor_lotes import visual
@@ -28,7 +29,14 @@ from monitor_lotes.alertas import (
 from monitor_lotes.cache import Cache
 from monitor_lotes.config import Parametros
 from monitor_lotes.formato import num
-from monitor_lotes.lotes import Lote, LoteInvalidoError, a_kml, crear_lote, lote_desde_texto
+from monitor_lotes.lotes import (
+    Lote,
+    LoteInvalidoError,
+    a_kml,
+    hectareas_wgs84,
+    lote_desde_dibujo,
+    lote_desde_texto,
+)
 from monitor_lotes.serie import Serie, calcular_serie, importar
 
 RAIZ = Path(__file__).parent
@@ -62,10 +70,28 @@ def fijar_lote(lote: Lote | None) -> None:
 
 def al_cambiar_origen() -> None:
     fijar_lote(None)
+    restaurar_dibujo()
+
+
+def editar_dibujo() -> None:
+    st.session_state["serie"] = None
+    restaurar_dibujo()
+
+
+def restaurar_dibujo() -> None:
+    """El mapa de dibujo vuelve con los dibujos y el giro que había.
+
+    Streamlit borra el valor de un control que no se mostró en la última pasada (el de giro
+    no se ve mientras se muestran los resultados), por eso el ángulo se guarda aparte.
+    """
+    st.session_state["dibujos_iniciales"] = st.session_state.get("dibujos", [])
+    st.session_state["giro"] = st.session_state.get("giro_guardado", 0)
 
 
 st.session_state.setdefault("lote", None)
 st.session_state.setdefault("serie", None)
+st.session_state.setdefault("dibujos", [])  # geometrías GeoJSON dibujadas (WGS84)
+st.session_state.setdefault("dibujos_iniciales", [])  # con las que arranca el mapa de dibujo
 
 
 # ---------------------------------------------------------------- mapas
@@ -78,6 +104,43 @@ def mapa_base(lote: Lote | None) -> folium.Map:
     if lote is not None:
         minx, miny, maxx, maxy = lote.geometria.bounds
         m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(20, 20))
+    return m
+
+
+def mapa_dibujo(iniciales: list[dict]) -> folium.Map:
+    """Mapa con herramientas para dibujar, editar y borrar. Arranca con `iniciales` editables.
+
+    Se arma siempre igual mientras se dibuja (no depende de lo último dibujado): si el HTML
+    del mapa cambiara, el componente lo recargaría y se perderían los trazos y el zoom.
+    """
+    m = mapa_base(None)
+    grupo = folium.FeatureGroup(name="Dibujos")
+    for g in iniciales:
+        geom = shape(g)
+        for p in getattr(geom, "geoms", [geom]):
+            folium.Polygon(
+                [(y, x) for x, y in p.exterior.coords],
+                color="#ffffff",
+                weight=2,
+                fill=True,
+                fill_opacity=0.1,
+            ).add_to(grupo)
+    grupo.add_to(m)
+    Draw(
+        feature_group=grupo,
+        draw_options={
+            "polyline": False,
+            "circle": False,
+            "marker": False,
+            "circlemarker": False,
+            "polygon": {"allowIntersection": False, "showArea": True},
+            "rectangle": {"showArea": True},
+        },
+        edit_options={"edit": True, "remove": True},
+    ).add_to(m)
+    if iniciales:
+        minx, miny, maxx, maxy = unary_union([shape(g) for g in iniciales]).bounds
+        m.fit_bounds([[miny, minx], [maxy, maxx]], padding=(40, 40))
     return m
 
 
@@ -183,11 +246,102 @@ with st.sidebar:
                 st.error(f"No pude leer el lote: {e}")
 
     else:
-        st.caption("Usá ⬟ (polígono) o ■ (rectángulo) arriba a la izquierda del mapa.")
-        if st.session_state["lote"] is not None and st.button("Borrar y dibujar otro"):
-            fijar_lote(None)
+        st.caption("Dibujá el lote con las herramientas de la izquierda del mapa.")
+        if st.session_state["serie"] is not None:
+            st.button("Editar el dibujo", on_click=editar_dibujo)
+
+
+# ---------------------------------------------------------------- dibujo del lote
+
+st.title("Monitor de lotes con NDVI")
+st.caption(
+    "Imágenes Sentinel-2 gratuitas (10 m), filtradas por nubes dentro del lote. "
+    "La app detecta cambios; no diagnostica sus causas."
+)
+
+if origen == ORIGENES[2] and st.session_state["serie"] is None:
+    st.subheader("Dibujá el lote")
+    st.markdown(
+        "- **⬟ Polígono:** clic en cada esquina del lote y clic en el primer punto para cerrar. "
+        "Es lo más preciso para lotes inclinados.\n"
+        "- **■ Rectángulo:** arrastrá; después lo podés **girar** con el control de abajo.\n"
+        "- **✎ Editar:** mové los vértices y tocá *Save*. "
+        "**🗑 Borrar:** tocá el dibujo que querés eliminar y después *Save*."
+    )
+    dibujos: list[dict] = st.session_state["dibujos"]
+    if st.session_state.pop("reiniciar_giro", False):
+        st.session_state["giro"] = 0  # se hace antes de crear el control (Streamlit lo exige)
+    c_sel, c_giro = st.columns([1, 2])
+    i_dibujo = len(dibujos) - 1
+    if len(dibujos) > 1:
+        i_dibujo = c_sel.selectbox(
+            "¿Cuál dibujo es el lote?",
+            range(len(dibujos)),
+            index=len(dibujos) - 1,
+            format_func=lambda i: f"Dibujo {i + 1} · {num(hectareas_wgs84(shape(dibujos[i])))} ha",
+        )
+    grados = c_giro.slider(
+        "Girar el lote (grados; positivo = sentido horario)",
+        -90,
+        90,
+        0,
+        1,
+        key="giro",
+        disabled=not dibujos,
+    )
+    st.session_state["giro_guardado"] = grados
+
+    lote_dibujado, error_dibujo = None, None
+    if dibujos:
+        try:
+            lote_dibujado = lote_desde_dibujo(dibujos[i_dibujo], grados)
+        except LoteInvalidoError as e:
+            error_dibujo = str(e)
+
+    # La vista previa se agrega como capa aparte: así el mapa no se recarga y no se pierden
+    # los dibujos ni el zoom al mover el control de giro.
+    vista_previa = folium.FeatureGroup(name="Lote a analizar")
+    if lote_dibujado is not None:
+        folium.GeoJson(
+            lote_dibujado.a_geojson(),
+            style_function=lambda _: {
+                "color": "#ffd60a",
+                "weight": 3,
+                "dashArray": "6 4",
+                "fillOpacity": 0,
+            },
+        ).add_to(vista_previa)
+
+    salida = st_folium(
+        mapa_dibujo(st.session_state["dibujos_iniciales"]),
+        key="dibujo",
+        height=560,
+        use_container_width=True,
+        returned_objects=["all_drawings"],
+        feature_group_to_add=vista_previa,
+    )
+    nuevos = (salida or {}).get("all_drawings")
+    if nuevos is not None:
+        nuevos = [
+            d["geometry"]
+            for d in nuevos
+            if (d.get("geometry") or {}).get("type") in ("Polygon", "MultiPolygon")
+        ]
+        if nuevos != dibujos:
+            st.session_state["dibujos"] = nuevos
+            st.session_state["reiniciar_giro"] = True  # un dibujo nuevo arranca sin girar
             st.rerun()
 
+    if error_dibujo:
+        st.error(error_dibujo)
+    elif lote_dibujado is not None:
+        st.caption("Contorno **amarillo punteado**: el lote que se va a analizar.")
+    fijar_lote(lote_dibujado)
+
+
+# ---------------------------------------------------------------- barra lateral (cont.)
+
+with st.sidebar:
     lote: Lote | None = st.session_state["lote"]
     if lote is not None:
         st.success(f"**{lote.nombre}** · {num(lote.hectareas)} ha · UTM EPSG:{lote.epsg_utm}")
@@ -252,12 +406,6 @@ with st.sidebar:
 
 # ---------------------------------------------------------------- cálculo
 
-st.title("Monitor de lotes con NDVI")
-st.caption(
-    "Imágenes Sentinel-2 gratuitas (10 m), filtradas por nubes dentro del lote. "
-    "La app detecta cambios; no diagnostica sus causas."
-)
-
 if calcular and lote is not None:
     barra = st.progress(0.0, text="Buscando imágenes en el catálogo…")
 
@@ -274,9 +422,10 @@ if calcular and lote is not None:
             progreso=progreso,
         )
     except RuntimeError as e:
-        st.error(f"No se pudo consultar el catálogo de imágenes. Probá de nuevo más tarde. ({e})")
-    finally:
         barra.empty()
+        st.error(f"No se pudo consultar el catálogo de imágenes. Probá de nuevo más tarde. ({e})")
+    else:
+        st.rerun()  # vuelve a dibujar la pantalla ya con resultados (y sin el mapa de dibujo)
 
 serie: Serie | None = st.session_state["serie"]
 
@@ -284,41 +433,19 @@ serie: Serie | None = st.session_state["serie"]
 # ---------------------------------------------------------------- pantalla principal
 
 if lote is None:
-    if origen == ORIGENES[2]:
-        m = mapa_base(None)
-        Draw(
-            draw_options={
-                "polyline": False,
-                "circle": False,
-                "marker": False,
-                "circlemarker": False,
-                "polygon": {"allowIntersection": False},
-                "rectangle": True,
-            },
-            edit_options={"edit": False, "remove": False},
-        ).add_to(m)
-        salida = st_folium(
-            m, key="dibujo", height=560, use_container_width=True, returned_objects=["all_drawings"]
-        )
-        dibujos = (salida or {}).get("all_drawings") or []
-        if dibujos:
-            try:
-                fijar_lote(crear_lote(shape(dibujos[-1]["geometry"]), "Lote dibujado"))
-                st.rerun()
-            except LoteInvalidoError as e:
-                st.error(str(e))
-    else:
+    if origen != ORIGENES[2]:  # en modo dibujo el mapa ya está arriba
         st.info("Cargá un lote en la barra de la izquierda para empezar.")
     st.stop()
 
 if serie is None:
-    st_folium(
-        mapa_base(lote).add_child(contorno(lote)),
-        key="vista_lote",
-        height=480,
-        use_container_width=True,
-        returned_objects=[],
-    )
+    if origen != ORIGENES[2]:
+        st_folium(
+            mapa_base(lote).add_child(contorno(lote)),
+            key="vista_lote",
+            height=480,
+            use_container_width=True,
+            returned_objects=[],
+        )
     st.info("Elegí el rango de fechas y tocá **Calcular NDVI**.")
     st.stop()
 
