@@ -185,7 +185,21 @@ entrevista con la respuesta corta.
 - **Por qué:** una baja no es "mala" en sí misma (puede ser cosecha). Coherente con "detecta, no
   diagnostica".
 
-### 6.8 Lote de ejemplo precalculado
+### 6.8 Dibujo del lote: editable, con selección y giro
+- **Elegí:** las herramientas de Leaflet.draw que ya trae folium (polígono punto por punto,
+  rectángulo, editar vértices, borrar el dibujo que elijas), un selector si hay varios dibujos,
+  y un control **"Girar el lote"** que rota el dibujo sobre su centro.
+- **Descarté:** Leaflet-Geoman (trae giro con el mouse, pero streamlit-folium solo escucha los
+  eventos de Leaflet.draw: los dibujos no volverían a Python).
+- **Por qué el giro se calcula en UTM:** girar en grados de lon/lat deformaría el lote (a esta
+  latitud un grado de longitud mide ~95 km y uno de latitud ~111 km). Hay tests que verifican
+  que la superficie no cambia y que +90° gira en sentido horario.
+- **Detalle de Streamlit:** el mapa de dibujo se arma igual mientras se dibuja y la vista previa
+  del giro va como capa aparte (`feature_group_to_add`); si el HTML del mapa cambiara, se
+  recargaría y se perderían los trazos. Y como Streamlit borra el valor de un control que no se
+  mostró, el ángulo se guarda aparte para recuperarlo al volver a editar (hay un test).
+
+### 6.9 Lote de ejemplo precalculado
 - **Por qué:** la demo online carga al instante y sin internet: lee `data/ejemplo/resultados`
   (CSV + GeoTIFF multibanda). El lote es **aproximado**.
 
