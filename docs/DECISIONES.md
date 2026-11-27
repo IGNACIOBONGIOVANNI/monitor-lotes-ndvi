@@ -220,6 +220,21 @@ entrevista con la respuesta corta.
 - **Por qué:** la demo online carga al instante y sin internet: lee `data/ejemplo/resultados`
   (CSV + GeoTIFF multibanda). El lote es **aproximado**.
 
+### 6.10 Logo propio generado con código
+- **Elegí:** un logo hecho con un script (`scripts/generar_logo.py`): un potrero visto desde el
+  satélite, levemente girado, con zonas en la escala de NDVI de la app, los surcos marcados y
+  una mancha naranja que representa una alerta. El mismo script genera el SVG y los PNG
+  (dibuja en grande y achica para suavizar bordes), y un test verifica que `assets/` coincida
+  con el script.
+- **Descarté:** un emoji como ícono (genérico y se ve distinto en cada sistema) e íconos de
+  terceros (habría que revisar licencias).
+
+### 6.11 Crédito del mapa sin la bandera de Leaflet
+- Desde la versión 1.8, Leaflet agrega por defecto una bandera de Ucrania junto a su nombre en
+  el crédito del mapa. La saqué con `attributionControl.setPrefix`, dejando el link a Leaflet
+  y los créditos de cada capa (Esri World Imagery). Es una decisión estética: no cambia nada
+  técnico.
+
 ---
 
 ## 7. Alertas
