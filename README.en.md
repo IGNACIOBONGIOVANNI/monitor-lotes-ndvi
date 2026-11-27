@@ -23,8 +23,8 @@ every few days, but downloading them, removing clouds and comparing dates by han
 This app automates it for one field:
 
 1. Load the field: a **Google Earth KML**, a **GeoJSON**, or **draw it on the map** (a
-   point-by-point polygon, or a rectangle you can **rotate**; drawings can be edited and
-   deleted one by one).
+   point-by-point polygon or a rectangle; **rotate** and **move** it by dragging the ↻ and ✥
+   handles, and edit or delete drawings one by one).
 2. The app searches the images for a date range, **discards cloudy dates by looking only at
    the field**, and computes NDVI.
 3. It shows the field colored by NDVI with a date selector, plus the curve for the whole season.

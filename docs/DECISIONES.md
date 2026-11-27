@@ -185,19 +185,36 @@ entrevista con la respuesta corta.
 - **Por qué:** una baja no es "mala" en sí misma (puede ser cosecha). Coherente con "detecta, no
   diagnostica".
 
-### 6.8 Dibujo del lote: editable, con selección y giro
+### 6.8 Dibujo del lote: manijas para girar y mover, edición y borrado
 - **Elegí:** las herramientas de Leaflet.draw que ya trae folium (polígono punto por punto,
-  rectángulo, editar vértices, borrar el dibujo que elijas), un selector si hay varios dibujos,
-  y un control **"Girar el lote"** que rota el dibujo sobre su centro.
-- **Descarté:** Leaflet-Geoman (trae giro con el mouse, pero streamlit-folium solo escucha los
-  eventos de Leaflet.draw: los dibujos no volverían a Python).
-- **Por qué el giro se calcula en UTM:** girar en grados de lon/lat deformaría el lote (a esta
-  latitud un grado de longitud mide ~95 km y uno de latitud ~111 km). Hay tests que verifican
-  que la superficie no cambia y que +90° gira en sentido horario.
-- **Detalle de Streamlit:** el mapa de dibujo se arma igual mientras se dibuja y la vista previa
-  del giro va como capa aparte (`feature_group_to_add`); si el HTML del mapa cambiara, se
-  recargaría y se perderían los trazos. Y como Streamlit borra el valor de un control que no se
-  mostró, el ángulo se guarda aparte para recuperarlo al volver a editar (hay un test).
+  rectángulo, editar vértices, borrar el dibujo que elijas) más **manijas propias** sobre cada
+  lote: **↻** arriba para girar y **✥** en el centro para mover, manteniendo apretado y
+  arrastrando, como en un programa de diseño (`src/monitor_lotes/manijas.js`, ~300 líneas).
+- **Primera versión descartada (por feedback de uso):** un control deslizante "Girar el lote"
+  con una vista previa aparte. Era indirecto y confundía: se veían dos figuras, la dibujada
+  quieta y la girada encima.
+- **Descarté también:** Leaflet-Geoman y Leaflet.Path.Transform (traen giro con el mouse, pero
+  streamlit-folium solo escucha los eventos de Leaflet.draw: los cambios no volverían a Python).
+- **Cómo vuelven los cambios a Python:** al soltar una manija se dispara `draw:edited`, el mismo
+  evento que usa Leaflet.draw. streamlit-folium lo escucha y relee todo el grupo de dibujos
+  (`drawnItems.toGeoJSON()`). No hizo falta ningún canal nuevo; hay un test que verifica que,
+  después del renombrado de variables que hace streamlit-folium, las manijas apuntan a ese grupo.
+- **Geometría en el navegador:** giro y desplazamiento en píxeles de Web Mercator. Mercator es
+  conforme (conserva ángulos), así que un rectángulo girado sigue siendo un rectángulo. La
+  superficie cambia ~0,04 % en un lote de 1,5 km por la variación de escala con la latitud
+  (235,2 → 235,3 ha): despreciable frente a píxeles de 10 m. Las funciones de geometría
+  (centroide, giro, ángulo) están testeadas con Node.
+- **Dos trampas de Leaflet.draw que aparecieron probando:**
+  1. Pasarle `edit: true` (lo que hace folium con `edit_options={"edit": True}`) pisa sus
+     opciones de estilo y el modo ✎ Editar falla en silencio: no aparecen los vértices. Se
+     arregla pasando un diccionario con `selectedPathOptions`.
+  2. Leaflet.draw guarda una referencia a los vértices de cuando se creó la figura; después de
+     girarla hay que avisarle con el evento `revert-edited`, o el modo ✎ Editar muestra los
+     vértices viejos. Además, los rectángulos se convierten en polígonos al crearlos: un
+     rectángulo de Leaflet.draw vuelve a quedar alineado norte-sur al editarlo.
+- **Detalle de Streamlit:** el mapa de dibujo se arma siempre igual mientras se dibuja (si su
+  HTML cambiara, se recargaría y se perderían los trazos y el zoom); el resaltado del lote
+  elegido, cuando hay varios dibujos, va como capa aparte (`feature_group_to_add`).
 
 ### 6.9 Lote de ejemplo precalculado
 - **Por qué:** la demo online carga al instante y sin internet: lee `data/ejemplo/resultados`

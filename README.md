@@ -22,8 +22,8 @@ Sentinel-2 son gratuitas y pasan cada pocos días, pero bajarlas, sacar las nube
 a mano lleva tiempo. Esta app lo automatiza para un lote:
 
 1. Cargás el lote: un **KML de Google Earth**, un **GeoJSON** o lo **dibujás en el mapa**
-   (polígono punto por punto o rectángulo que se puede **girar**; los dibujos se editan y se
-   borran de a uno).
+   (polígono punto por punto o rectángulo; se **gira** y se **mueve** arrastrando las manijas
+   ↻ y ✥, y los dibujos se editan y se borran de a uno).
 2. La app busca las imágenes del rango de fechas, **descarta las nubladas mirando solo el
    lote** y calcula el NDVI.
 3. Muestra el lote coloreado por NDVI con selector de fecha, y la curva de toda la campaña.
