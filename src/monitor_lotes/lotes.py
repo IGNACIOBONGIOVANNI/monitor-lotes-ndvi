@@ -259,3 +259,30 @@ def a_kml(geom: Polygon | MultiPolygon, nombre: str, descripcion: str = "") -> s
         f"<description>{escape(descripcion)}</description>{cuerpo}</Placemark>"
         "</Document></kml>\n"
     )
+
+
+# ---------------------------------------------------------------- dibujo en el mapa
+
+
+def girar(geom: BaseGeometry, grados: float) -> BaseGeometry:
+    """Gira una geometría WGS84 sobre su centro. Positivo = sentido horario (como una brújula).
+
+    El giro se hace en metros (UTM): girar en grados de lon/lat deformaría el lote, porque
+    a esta latitud un grado de longitud mide ~95 km y uno de latitud ~111 km.
+    """
+    if not grados:
+        return geom
+    from shapely.affinity import rotate
+
+    epsg = zona_utm_epsg(geom)
+    girada = rotate(a_crs(geom, epsg), -grados, origin="centroid")  # shapely: + es antihorario
+    return a_crs(girada, 4326, desde_epsg=epsg)
+
+
+def hectareas_wgs84(geom: BaseGeometry) -> float:
+    return a_crs(geom, zona_utm_epsg(geom)).area / 10_000
+
+
+def lote_desde_dibujo(geometria: dict, grados: float = 0, nombre: str = "Lote dibujado") -> Lote:
+    """Arma el lote a partir de una geometría GeoJSON dibujada en el mapa, girada si hace falta."""
+    return crear_lote(girar(shape(geometria), grados), nombre)
