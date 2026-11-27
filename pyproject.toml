@@ -33,6 +33,9 @@ monitor-lotes = "monitor_lotes.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+monitor_lotes = ["*.js"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
